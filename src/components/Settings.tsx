@@ -89,7 +89,7 @@ export default function Settings() {
               <div className="flex items-center justify-between">
                 <label className="text-sm font-bold uppercase tracking-widest flex items-center gap-2">
                   <Key className="w-4 h-4 text-netflix-gray" />
-                  Clé API
+                  Clé API {settings.provider.toUpperCase()} (Modèle : gemini-3.6-flash)
                 </label>
                 <button 
                   onClick={() => setShowKey(!showKey)}
@@ -103,18 +103,18 @@ export default function Settings() {
                   type={showKey ? "text" : "password"}
                   value={settings.apiKey}
                   onChange={(e) => setSettings(prev => ({ ...prev, apiKey: e.target.value }))}
-                  placeholder={`Entrez votre clé API ${settings.provider.toUpperCase()}`}
-                  className="w-full bg-white/5 border border-white/10 rounded-xl py-4 px-6 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600/50 transition-all font-mono"
+                  placeholder={settings.provider === 'gemini' ? "Laissez vide pour utiliser la clé serveur par défaut, ou entrez votre clé" : `Entrez votre clé API ${settings.provider.toUpperCase()}`}
+                  className="w-full bg-white/5 border border-white/10 rounded-xl py-4 px-6 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600/50 transition-all font-mono placeholder:text-netflix-gray/50"
                 />
                 <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-2">
                   <ShieldCheck className="w-4 h-4 text-green-500" />
-                  <span className="text-[10px] font-bold text-green-500 uppercase">Chiffré</span>
+                  <span className="text-[10px] font-bold text-green-500 uppercase">Sécurisé</span>
                 </div>
               </div>
               <div className="flex items-start gap-3 p-4 rounded-lg bg-blue-600/10 border border-blue-600/20">
                 <Info className="w-5 h-5 text-blue-400 shrink-0" />
                 <p className="text-xs text-blue-400 leading-relaxed">
-                  Votre clé API est stockée localement dans votre navigateur et n'est utilisée que pour communiquer directement avec le fournisseur d'IA choisi.
+                  L'IA utilise le modèle ultra-récent <strong>Gemini 3.6 Flash</strong>. Elle possède une maîtrise complète de votre bibliothèque (recherche de films/séries, correction de titres, résumés et recommandations). Si la clé est vide, la clé d'environnement est utilisée automatiquement.
                 </p>
               </div>
             </div>

@@ -55,3 +55,43 @@ export const addToLibrary = (video: VideoMetadata) => {
     saveLibrary(library);
   }
 };
+
+export const toggleFavorite = (videoId: string): LibraryState => {
+  const library = getLibrary();
+  const item = library.items.find(i => i.id === videoId);
+  if (item) {
+    item.isFavorite = !item.isFavorite;
+    saveLibrary(library);
+  } else {
+    // If it's a series episode or item not directly matching, check if any matching items exist
+    const seriesItems = library.items.filter(i => i.seriesId === videoId);
+    if (seriesItems.length > 0) {
+      const anyUnfav = seriesItems.some(i => !i.isFavorite);
+      seriesItems.forEach(i => i.isFavorite = anyUnfav);
+      saveLibrary(library);
+    }
+  }
+  return library;
+};
+
+export const removeFromLibrary = (videoId: string): LibraryState => {
+  const library = getLibrary();
+  library.items = library.items.filter(i => i.id !== videoId && i.seriesId !== videoId);
+  library.history = library.history.filter(id => id !== videoId);
+  saveLibrary(library);
+  return library;
+};
+
+export const updateVideoMetadata = (videoId: string, updates: Partial<VideoMetadata>): LibraryState => {
+  const library = getLibrary();
+  const itemsToUpdate = library.items.filter(i => i.id === videoId || i.seriesId === videoId);
+  itemsToUpdate.forEach(item => {
+    if (updates.title) item.title = updates.title;
+    if (updates.category) item.category = updates.category;
+    if (updates.year) item.year = updates.year;
+    if (updates.description) item.description = updates.description;
+  });
+  saveLibrary(library);
+  return library;
+};
+

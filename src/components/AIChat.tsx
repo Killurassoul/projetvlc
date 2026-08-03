@@ -9,14 +9,15 @@ interface AIChatProps {
   isOpen: boolean;
   onClose: () => void;
   context?: string;
+  onAction?: (actionName: string, args: any) => void;
 }
 
-export default function AIChat({ isOpen, onClose, context }: AIChatProps) {
+export default function AIChat({ isOpen, onClose, context, onAction }: AIChatProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: '1',
       role: 'assistant',
-      content: "Bonjour ! Je suis votre assistant IA pour Rassoul Hub. Posez-moi n'importe quoi sur la scène actuelle, les personnages, ou demandez-moi un résumé.",
+      content: "Bonjour ! Je suis votre assistant IA pour Rassoul Hub. Vous pouvez me demander de passer l'intro, passer le générique, lancer l'épisode suivant, ou analyser la scène !",
       timestamp: Date.now()
     }
   ]);
@@ -48,7 +49,7 @@ export default function AIChat({ isOpen, onClose, context }: AIChatProps) {
     setIsLoading(true);
 
     try {
-      const response = await getAIResponse(input, context);
+      const response = await getAIResponse(input, context, onAction);
       const assistantMsg: ChatMessage = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',

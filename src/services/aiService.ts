@@ -1,8 +1,6 @@
-import { GoogleGenAI } from "@google/genai";
-import OpenAI from "openai";
-import { AISettings, ChatMessage } from "../types";
+import { AISettings } from "../types";
+import { getLibrary, updateVideoMetadata } from "./libraryService";
 
-// Encryption placeholder (simple base64 for now as per "securely stored in local storage" requirement)
 const encrypt = (text: string) => btoa(text);
 const decrypt = (text: string) => {
   try {
@@ -22,10 +20,10 @@ export const getAISettings = (): AISettings => {
     };
   }
   return {
-    enabled: false,
-    provider: 'local',
+    enabled: true,
+    provider: 'gemini',
     apiKey: '',
-    model: 'mistral'
+    model: 'gemini-3.6-flash'
   };
 };
 
@@ -37,69 +35,56 @@ export const saveAISettings = (settings: AISettings) => {
   localStorage.setItem('rassoul_hub_ai_settings', JSON.stringify(toSave));
 };
 
-export async function getAIResponse(prompt: string, context?: string): Promise<string> {
+export async function getAIResponse(
+  prompt: string, 
+  context?: string, 
+  onAction?: (actionName: string, args: any) => void
+): Promise<string> {
   const settings = getAISettings();
-  const fullPrompt = context ? `Context: ${context}\n\nQuestion: ${prompt}` : prompt;
+  const library = getLibrary();
 
-  if (settings.enabled && settings.apiKey) {
-    try {
-      if (settings.provider === 'gemini') {
-        return await callGemini(settings.apiKey, fullPrompt);
-      } else if (settings.provider === 'openai') {
-        return await callOpenAI(settings.apiKey, fullPrompt);
-      }
-    } catch (error) {
-      console.error(`Cloud AI failed, falling back to local:`, error);
-      // Fallback to local
-    }
-  }
-
-  // Default or Fallback: Local Ollama
-  return await callOllama(settings.model || 'mistral', fullPrompt);
-}
-
-async function callGemini(apiKey: string, prompt: string): Promise<string> {
-  const ai = new GoogleGenAI({ apiKey });
-  const response = await ai.models.generateContent({
-    model: "gemini-3-flash-preview",
-    contents: prompt,
-    config: {
-      systemInstruction: "You are an AI assistant for Rassoul Hub, a modern media player. Help users with summaries, character analysis, and scene explanations based on the provided context.",
-    }
-  });
-  return response.text || "Sorry, I couldn't generate a response.";
-}
-
-async function callOpenAI(apiKey: string, prompt: string): Promise<string> {
-  const openai = new OpenAI({ apiKey, dangerouslyAllowBrowser: true });
-  const response = await openai.chat.completions.create({
-    model: "gpt-4o-mini",
-    messages: [
-      { role: "system", content: "You are an AI assistant for Rassoul Hub, a modern media player. Help users with summaries, character analysis, and scene explanations based on the provided context." },
-      { role: "user", content: prompt }
-    ],
-  });
-  return response.choices[0].message.content || "Sorry, I couldn't generate a response.";
-}
-
-async function callOllama(model: string, prompt: string): Promise<string> {
   try {
-    const response = await fetch('http://localhost:11434/api/generate', {
+    const response = await fetch('/api/ai/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: model,
-        prompt: prompt,
-        stream: false
+        prompt,
+        context,
+        libraryItems: library.items,
+        userApiKey: settings.apiKey || undefined,
+        model: settings.model || 'gemini-3.6-flash'
       })
     });
-    
-    if (!response.ok) throw new Error('Ollama not reachable');
-    
+
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({}));
+      throw new Error(errData.error || `Erreur serveur (${response.status})`);
+    }
+
     const data = await response.json();
-    return data.response;
-  } catch (error) {
-    console.error('Ollama error:', error);
-    return "Local AI (Ollama) is not reachable. Please ensure Ollama is running on localhost:11434 and OLLAMA_ORIGINS is set to allow this site.";
+
+    // If Gemini requested metadata correction or action
+    if (data.action) {
+      if (data.action.name === 'correctMetadata' && data.action.args) {
+        const { videoId, newTitle, newCategory, newYear } = data.action.args;
+        if (videoId) {
+          updateVideoMetadata(videoId, {
+            title: newTitle,
+            category: newCategory,
+            year: newYear ? String(newYear) : undefined
+          });
+        }
+      }
+      
+      // Dispatch action to player or UI callback
+      if (onAction && data.action.name) {
+        onAction(data.action.name, data.action.args || {});
+      }
+    }
+
+    return data.text || "Réponse générée avec succès par l'assistant Gemini.";
+  } catch (error: any) {
+    console.error('AI Request Error:', error);
+    return `Erreur IA : ${error.message || "Impossible de contacter l'assistant Gemini."}`;
   }
 }

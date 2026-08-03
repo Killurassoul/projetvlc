@@ -3,13 +3,14 @@ import {
   Plus, Upload, Film, Tv, Search, Filter, 
   Trash2, Play, Info, MoreVertical, Sparkles,
   FileVideo, X, CheckCircle2, Loader2, ArrowRight, FolderSearch,
-  LayoutGrid, List, Calendar, Clock as ClockIcon, Folder
+  LayoutGrid, List, Calendar, Clock as ClockIcon, Folder, Heart, Monitor, BarChart3
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { getLibrary, saveLibrary, addToLibrary } from '../services/libraryService';
+import { getLibrary, saveLibrary, addToLibrary, toggleFavorite, removeFromLibrary } from '../services/libraryService';
 import { VideoMetadata } from '../types';
 import { useNavigate } from 'react-router-dom';
 import { cn } from '../lib/utils';
+import Statistics from './Statistics';
 
 export default function Library() {
   const navigate = useNavigate();
@@ -23,6 +24,20 @@ export default function Library() {
   const folderInputRef = React.useRef<HTMLInputElement>(null);
 
   const videos = library.items;
+
+  const handleToggleFav = (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    const updated = toggleFavorite(id);
+    setLibrary({ ...updated });
+  };
+
+  const handleRemove = (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    if (confirm("Voulez-vous vraiment supprimer cet élément de votre bibliothèque ?")) {
+      const updated = removeFromLibrary(id);
+      setLibrary({ ...updated });
+    }
+  };
 
   const parseFileName = (fileName: string) => {
     // S01E01 or 1x01 pattern
@@ -125,10 +140,14 @@ export default function Library() {
     }, 1000);
   };
 
-  const categories = ['Tout', 'Série', 'Local', 'Science-Fiction', 'Documentaire', 'Thriller'];
+  const categories = ['Tout', 'Favoris', 'Série', 'Local', 'Science-Fiction', 'Documentaire', 'Thriller', 'Statistiques'];
 
   const filteredVideos = videos.filter(v => {
-    const matchesFilter = filter === 'Tout' || v.category === filter;
+    const matchesFilter = filter === 'Tout' 
+      ? true 
+      : filter === 'Favoris' 
+        ? !!v.isFavorite 
+        : v.category === filter;
     const matchesSearch = v.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
                          (v.seriesId && v.seriesId.includes(searchQuery.toLowerCase()));
     return matchesFilter && matchesSearch;
@@ -198,9 +217,14 @@ export default function Library() {
               <h1 className="text-7xl md:text-8xl font-black tracking-tighter uppercase italic font-display text-glow leading-none">
                 Ma Bibliothèque
               </h1>
-              <div className="flex items-center gap-3 text-netflix-gray font-bold uppercase tracking-[0.4em] text-[10px] ml-1">
+              <div className="flex flex-wrap items-center gap-4 text-netflix-gray font-bold uppercase tracking-[0.4em] text-[10px] ml-1">
                 <span className="w-8 h-[1px] bg-netflix-red" />
                 <span>{videos.length} Titres Importés</span>
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                <span className="text-emerald-400 font-black tracking-widest flex items-center gap-1.5">
+                  <Monitor className="w-3.5 h-3.5" />
+                  Mode Desktop (Sans Connexion)
+                </span>
               </div>
             </div>
           </motion.div>
@@ -294,11 +318,14 @@ export default function Library() {
       </div>
 
       {/* Content Layout */}
-      <div className={cn(
-        viewMode === 'grid' 
-          ? "grid grid-cols-1 md:grid-cols-4 gap-8" 
-          : "flex flex-col gap-4"
-      )}>
+      {filter === 'Statistiques' ? (
+        <Statistics videos={videos} />
+      ) : (
+        <div className={cn(
+          viewMode === 'grid' 
+            ? "grid grid-cols-1 md:grid-cols-4 gap-8" 
+            : "flex flex-col gap-4"
+        )}>
         <AnimatePresence mode="popLayout">
           {isUploading && (
             <motion.div
@@ -327,6 +354,7 @@ export default function Library() {
             const firstEp = episodes[0];
             const epCount = episodes.length;
             const seasons = Array.from(new Set(episodes.map(e => e.season))).length;
+            const isSeriesFav = episodes.some(e => e.isFavorite);
 
             return viewMode === 'grid' ? (
               <motion.div
@@ -359,6 +387,25 @@ export default function Library() {
                     <Tv className="w-64 h-64 rotate-12" />
                   </div>
                 </div>
+
+                {/* Favorite Heart Badge */}
+                <div className="absolute top-6 left-6 z-30">
+                  <motion.button
+                    whileHover={{ scale: 1.15 }}
+                    whileTap={{ scale: 0.9 }}
+                    onClick={(e) => handleToggleFav(e, seriesId)}
+                    className={cn(
+                      "p-3 rounded-2xl border backdrop-blur-2xl shadow-xl transition-all",
+                      isSeriesFav 
+                        ? "bg-netflix-red text-white border-netflix-red shadow-netflix-red/40" 
+                        : "bg-black/40 text-white/60 border-white/10 hover:text-white hover:bg-black/60"
+                    )}
+                    title={isSeriesFav ? "Retirer des favoris" : "Ajouter aux favoris"}
+                  >
+                    <Heart className={cn("w-5 h-5", isSeriesFav && "fill-current text-white")} />
+                  </motion.button>
+                </div>
+
                 <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent opacity-80 group-hover:opacity-95 transition-opacity duration-500" />
                 <div className="absolute bottom-0 left-0 w-full p-10 translate-y-4 group-hover:translate-y-0 opacity-0 group-hover:opacity-100 transition-all duration-500 z-20">
                   <div className="flex items-center gap-5 mb-6">
@@ -384,7 +431,16 @@ export default function Library() {
                     <p className="text-[10px] font-black text-netflix-gray uppercase tracking-[0.3em]">{seasons} Saisons • {epCount} Épisodes</p>
                   </div>
                   <div className="ml-auto flex items-center gap-4">
-                    <button className="px-6 py-3 rounded-xl bg-white/5 border border-white/10 text-xs font-black uppercase tracking-widest hover:bg-white/10 transition-all">Tout Voir</button>
+                    <button 
+                      onClick={(e) => handleToggleFav(e, seriesId)}
+                      className={cn(
+                        "p-3 rounded-xl border transition-all flex items-center gap-2 text-xs font-black uppercase tracking-widest",
+                        isSeriesFav ? "bg-netflix-red text-white border-netflix-red" : "bg-white/5 border-white/10 text-netflix-gray hover:text-white"
+                      )}
+                    >
+                      <Heart className={cn("w-4 h-4", isSeriesFav && "fill-current")} />
+                      <span>{isSeriesFav ? "Favori" : "Mettre en favori"}</span>
+                    </button>
                   </div>
                 </div>
                 <div className="grid grid-cols-1 gap-4 pl-12">
@@ -406,7 +462,15 @@ export default function Library() {
                       <div className="flex-1 min-w-0 space-y-4 relative z-10">
                         <div className="flex items-center justify-between">
                           <h3 className="text-2xl font-black font-display italic truncate group-hover:text-netflix-red transition-colors">Épisode {video.episode} • {video.title}</h3>
-                          <div className="flex items-center gap-6 text-netflix-gray">
+                          <div className="flex items-center gap-4 text-netflix-gray">
+                            <motion.button
+                              whileHover={{ scale: 1.15 }}
+                              whileTap={{ scale: 0.9 }}
+                              onClick={(e) => handleToggleFav(e, video.id)}
+                              className={cn("p-2 rounded-xl border transition-all", video.isFavorite ? "bg-netflix-red/20 text-netflix-red border-netflix-red/30" : "hover:text-white border-transparent")}
+                            >
+                              <Heart className={cn("w-4 h-4", video.isFavorite && "fill-current text-netflix-red")} />
+                            </motion.button>
                             {video.filePath && (
                               <div className="hidden lg:flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest bg-white/5 px-3 py-1 rounded-lg border border-white/5">
                                 <Folder className="w-3 h-3" />
@@ -414,7 +478,13 @@ export default function Library() {
                               </div>
                             )}
                             <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest"><ClockIcon className="w-4 h-4" />{video.duration}</div>
-                            <MoreVertical className="w-5 h-5 opacity-0 group-hover:opacity-100 transition-opacity" />
+                            <button 
+                              onClick={(e) => handleRemove(e, video.id)}
+                              className="p-2 rounded-xl text-netflix-gray hover:text-netflix-red transition-colors opacity-0 group-hover:opacity-100"
+                              title="Supprimer"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
                           </div>
                         </div>
                         <div className="space-y-2">
@@ -467,12 +537,34 @@ export default function Library() {
                 )}
                 <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent opacity-80 group-hover:opacity-95 transition-opacity duration-500" />
                 
+                {/* Favorite Heart Badge */}
+                <div className="absolute top-6 left-6 z-30">
+                  <motion.button
+                    whileHover={{ scale: 1.15 }}
+                    whileTap={{ scale: 0.9 }}
+                    onClick={(e) => handleToggleFav(e, video.id)}
+                    className={cn(
+                      "p-3 rounded-2xl border backdrop-blur-2xl shadow-xl transition-all",
+                      video.isFavorite 
+                        ? "bg-netflix-red text-white border-netflix-red shadow-netflix-red/40" 
+                        : "bg-black/40 text-white/60 border-white/10 hover:text-white hover:bg-black/60"
+                    )}
+                    title={video.isFavorite ? "Retirer des favoris" : "Ajouter aux favoris"}
+                  >
+                    <Heart className={cn("w-5 h-5", video.isFavorite && "fill-current text-white")} />
+                  </motion.button>
+                </div>
+
                 <div className="absolute top-6 right-6 flex items-center gap-3 z-20">
                   <div className="px-3 py-1.5 rounded-xl bg-black/60 backdrop-blur-xl text-xs font-black text-white border border-white/10 shadow-2xl">
                     {video.duration}
                   </div>
-                  <button className="p-2.5 rounded-xl bg-black/60 backdrop-blur-xl text-white border border-white/10 hover:bg-netflix-red transition-all shadow-2xl">
-                    <MoreVertical className="w-5 h-5" />
+                  <button 
+                    onClick={(e) => handleRemove(e, video.id)}
+                    className="p-2.5 rounded-xl bg-black/60 backdrop-blur-xl text-white/70 border border-white/10 hover:text-netflix-red hover:bg-black/80 transition-all shadow-2xl"
+                    title="Supprimer de la bibliothèque"
+                  >
+                    <Trash2 className="w-5 h-5" />
                   </button>
                 </div>
 
@@ -485,9 +577,17 @@ export default function Library() {
                     >
                       <Play className="w-5 h-5 fill-current" />
                     </motion.div>
-                    <div className="p-4 bg-white/10 backdrop-blur-xl rounded-full text-white border border-white/20 hover:bg-white/20 transition-colors">
-                      <Plus className="w-5 h-5" />
-                    </div>
+                    <motion.button 
+                      whileHover={{ scale: 1.1 }}
+                      whileTap={{ scale: 0.9 }}
+                      onClick={(e) => handleToggleFav(e, video.id)}
+                      className={cn(
+                        "p-4 backdrop-blur-xl rounded-full border transition-colors",
+                        video.isFavorite ? "bg-netflix-red text-white border-netflix-red" : "bg-white/10 text-white border-white/20 hover:bg-white/20"
+                      )}
+                    >
+                      <Heart className={cn("w-5 h-5", video.isFavorite && "fill-current")} />
+                    </motion.button>
                   </div>
                   <h3 className={cn(
                     "font-black tracking-tight truncate font-display italic",
@@ -529,6 +629,15 @@ export default function Library() {
                   <div className="flex items-center justify-between">
                     <h3 className="text-2xl font-black font-display italic truncate">{video.title}</h3>
                     <div className="flex items-center gap-4 text-netflix-gray">
+                      <motion.button
+                        whileHover={{ scale: 1.15 }}
+                        whileTap={{ scale: 0.9 }}
+                        onClick={(e) => handleToggleFav(e, video.id)}
+                        className={cn("p-2 rounded-xl border transition-all", video.isFavorite ? "bg-netflix-red/20 text-netflix-red border-netflix-red/30" : "hover:text-white border-transparent")}
+                        title={video.isFavorite ? "Retirer des favoris" : "Ajouter aux favoris"}
+                      >
+                        <Heart className={cn("w-4 h-4", video.isFavorite && "fill-current text-netflix-red")} />
+                      </motion.button>
                       {video.filePath && (
                         <div className="hidden lg:flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest bg-white/5 px-3 py-1 rounded-lg border border-white/5">
                           <Folder className="w-3 h-3" />
@@ -567,17 +676,22 @@ export default function Library() {
                   </div>
                 </div>
 
-                <button className="p-4 rounded-2xl bg-white/5 border border-white/10 text-netflix-gray hover:text-white hover:bg-white/10 transition-all">
-                  <MoreVertical className="w-6 h-6" />
+                <button 
+                  onClick={(e) => handleRemove(e, video.id)}
+                  className="p-4 rounded-2xl bg-white/5 border border-white/10 text-netflix-gray hover:text-netflix-red hover:bg-white/10 transition-all"
+                  title="Supprimer de la bibliothèque"
+                >
+                  <Trash2 className="w-6 h-6" />
                 </button>
               </motion.div>
             )
           ))}
         </AnimatePresence>
       </div>
+      )}
 
       {/* Empty State */}
-      {filteredVideos.length === 0 && !isUploading && (
+      {filter !== 'Statistiques' && filteredVideos.length === 0 && !isUploading && (
         <motion.div 
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
